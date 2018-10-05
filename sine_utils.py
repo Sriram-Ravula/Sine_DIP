@@ -1,16 +1,3 @@
-import numpy as np
-import os
-import errno
-import parser
-
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
-from torchvision import datasets,transforms
-
-import matplotlib.pyplot as plt
-import numpy as np
 import random
 
 import torch
@@ -22,8 +9,8 @@ import torch.nn.functional as F
 import numpy as np
 import matplotlib.pyplot as plt
 
-import sine_utils as nets
 import math
+
 
 #Starts with len 16, straight 64 channels, length doubles each time
 class DCGAN_Straight(nn.Module):
@@ -92,6 +79,7 @@ class DCGAN_Straight(nn.Module):
         else:
             return meas
 
+
 #starts with len 16, 2048 channels shrinking, len doubles each time
 class DCGAN_Funnel(nn.Module):
     def __init__(self, nz, ngf=64, output_size=1024, nc=1, num_measurements=64, cuda = True):
@@ -158,6 +146,7 @@ class DCGAN_Funnel(nn.Module):
             return meas.cuda()
         else:
             return meas
+
 
 #starts with len 4, 64 straight channels, len doubles each time
 class DCGAN_Straight_Exhaustive(nn.Module):
@@ -236,6 +225,7 @@ class DCGAN_Straight_Exhaustive(nn.Module):
         else:
             return meas
 
+
 #starts with len 4, 2048 channels shrinking, len doubles each time
 class DCGAN_Funnel_Exhaustive(nn.Module):
     def __init__(self, nz, ngf=64, output_size=1024, nc=1, num_measurements=64, cuda = True):
@@ -313,13 +303,15 @@ class DCGAN_Funnel_Exhaustive(nn.Module):
         else:
             return meas
 
+
 #num_harmonics selects how many superimposed waveforms to train on, gan selects which net topology to use
-def run(num_harmonics = 1, gan = 2, num_iter = 80, wave_size = 1024, wave_periods = 2, num_measurements = 1024, cuda = True, compressed = False, plot_waves = False, filters_per_layer = 64, batch_size = 1, num_channels = 1, seed_size = 32, learning_rate = 1e-3, momentum = 0.9, weight_decay = 1e-4):
+def run(num_harmonics = 1, gan = 2, num_iter = 80, wave_size = 1024, wave_periods = 2, std = 0.1, num_measurements = 1024, cuda = True, compressed = False, compressed_noisy = False, plot_waves = False, filters_per_layer = 64, batch_size = 1, num_channels = 1, seed_size = 32, learning_rate = 1e-3, momentum = 0.9, weight_decay = 1e-4):
 
     mse_log = np.zeros((num_iter)) #track the MSE between the denoised and net output
     best_wave = np.zeros((wave_size)) #track the best waveform
     cur_best_mse = 1e6 #track the current best MSE
 
+    #select net topology
     if(gan==0):
         net = DCGAN_Straight(seed_size, filters_per_layer, wave_size, num_channels, num_measurements, cuda = cuda)
     elif(gan==1):
@@ -341,8 +333,14 @@ def run(num_harmonics = 1, gan = 2, num_iter = 80, wave_size = 1024, wave_period
     else:
         dtype = torch.FloatTensor
 
+
+    #initialize the fc layer as the measurement matrix A
     if compressed:
-        net.fc.weight.data = (1 / math.sqrt(1.0 * num_measurements)) * torch.randn(num_measurements, wave_size * num_channels)
+        if compressed_noisy:
+            net.fc.weight.data = (1 / math.sqrt(1.0 * num_measurements)) * torch.randn(num_measurements, wave_size * num_channels) #measurement matrix is normalized gaussian R^(num_measurements, wave_size*num_channels)
+        else:
+            kept_samples = random.sample(range(0, wave_size), num_measurements) #randomly select num_measurements samples to keep
+            net.fc.weight.data = torch.eye(wave_size)[kept_samples,:] #grab rows corresponding to index of randomly kept samples from identity
     else:
         net.fc.weight.data = torch.eye(wave_size)
 
@@ -355,8 +353,8 @@ def run(num_harmonics = 1, gan = 2, num_iter = 80, wave_size = 1024, wave_period
     # Define optimizer
     optim = torch.optim.RMSprop(allparams, lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
 
-    y0 = get_sinusoid(num_samples=wave_size, num_periods=wave_periods, num_harmonics = num_harmonics, noisy=True)
-    y0_denoised = get_sinusoid(num_samples=wave_size, num_periods=wave_periods, num_harmonics=num_harmonics, noisy=False)
+    y0 = get_sinusoid(num_samples=wave_size, num_periods=wave_periods, num_harmonics = num_harmonics, noisy=(not compressed), std = std)
+    y0_denoised = get_sinusoid(num_samples=wave_size, num_periods=wave_periods, num_harmonics=num_harmonics, noisy=False, std = std)
 
     # Plot both noisy (blue) and denoised (red) waveforms
     if plot_waves:
@@ -369,13 +367,15 @@ def run(num_harmonics = 1, gan = 2, num_iter = 80, wave_size = 1024, wave_period
     MU = get_stats(y0)[0]
     SIGMA = get_stats(y0)[1]
 
+    #normalize the sinusoid to [-1,1]
     y = torch.Tensor(y0)
     y = normalise(y, MU, SIGMA)
     y = Variable(y.type(dtype))
 
+    #get the measurements y (A*y in the compressed case) to compare the net output with
     measurements = Variable(torch.mm(y.cpu().data.view(batch_size, -1), net.fc.weight.data.permute(1, 0)), requires_grad=False)
 
-    if cuda:  # move measurements to GPU if possible
+    if cuda:
         measurements = measurements.cuda()
 
     mse = torch.nn.MSELoss().type(dtype)
@@ -402,6 +402,7 @@ def run(num_harmonics = 1, gan = 2, num_iter = 80, wave_size = 1024, wave_period
 
     return [mse_log, best_wave]
 
+
 def get_sinusoid(num_samples, num_periods, num_harmonics = 1, noisy = True, std = 0.1, mean = 0):
     Fs = num_samples
     x = np.arange(num_samples)
@@ -409,7 +410,7 @@ def get_sinusoid(num_samples, num_periods, num_harmonics = 1, noisy = True, std 
     y = np.zeros((num_samples))
 
     for i in range(num_harmonics):
-        y += np.sin(2 * np.pi * (i+1) * num_periods * x / Fs)
+        y += np.sin(2 * np.pi * (2**i) * num_periods * x / Fs)
 
     if noisy:
         y += (std * np.random.randn(num_samples)) + mean
@@ -424,8 +425,10 @@ def get_stats(x):
     sigma = (b-a)/2.0
     return [mu, sigma]
 
+
 def normalise(x, mu, sigma):
     return (x-mu)/sigma
+
 
 def renormalise(x, mu, sigma):
     return x*sigma + mu

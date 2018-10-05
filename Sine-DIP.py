@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import utils
 import sine_utils as nets
 import math
+import wavio
 
 
 #set up hyperparameters, net input/output sizes, and whether the problem is compressed sensing
@@ -50,7 +51,7 @@ print("Using CUDA: ", CUDA)
 start = time.time()
 best_log = np.zeros((50))
 for i in range(50):
-    best_log[i] = np.argmin(nets.run()[0])
+    best_log[i] = np.argmin(nets.run(cuda = CUDA)[0])
 end = time.time()
 
 print("time elapsed: ", start-end)
