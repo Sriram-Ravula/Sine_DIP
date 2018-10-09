@@ -26,7 +26,7 @@ CUDA = torch.cuda.is_available()
 print("Using CUDA: ", CUDA)
 
 for i in range(len(harmonics_list)):
-    mse_list[i,:] = nets.run(cuda = CUDA, num_harmonics=harmonics_list[i], num_iter=NUM_ITER, wave_periods=WAVE_PERIODS)[0]
+    mse_list[i, :] = nets.run(cuda = CUDA, num_harmonics=harmonics_list[i], num_iter=NUM_ITER, wave_periods=WAVE_PERIODS)[0]
 
 x_axis = np.arange(NUM_ITER)
 for i in range(len(harmonics_list)):
