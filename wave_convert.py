@@ -6,8 +6,8 @@ OUTPUT_RATE = 8192
 OUTPUT_LENGTH = 2
 OUTPUT_CHANNELS = 1
 
-in_filename = "test.wav"
-out_filename = "testR.wav"
+in_filename = "Testing.wav"
+out_filename = "TestingR.wav"
 
 wav = wavio.read(in_filename)
 rate = wav.rate
