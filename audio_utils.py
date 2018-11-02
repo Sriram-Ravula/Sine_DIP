@@ -126,7 +126,7 @@ def read_wav(filename):
 
     return [rate, length, resolution, nc, y0]
 
-def run_Lasso(A, measurements, wave_res = 2, wave_rate = 8192, num_measurements = 1000, output_size = 16834, num_channels = 1, alpha = 0.001):
+def run_Lasso(A, mean, std, measurements, filename, test_type, wave_res = 2, wave_rate = 8192, num_measurements = 1000, output_size = 16834, num_channels = 1, alpha = 0.001):
     lasso = Lasso(alpha=alpha)
     lasso.fit(A, measurements)
 
@@ -134,9 +134,11 @@ def run_Lasso(A, measurements, wave_res = 2, wave_rate = 8192, num_measurements 
     x_hat = spfft.idct(x_hat, norm='ortho', axis=0)
     x_hat = x_hat.reshape(-1, 1)
 
-    #wavio.write("Audio_recon/Lasso_" + str(num_measurements) + "_testR.wav", x_hat, wave_rate, sampwidth=wave_res)
+    wavio.write("Audio_recon/" + filename + "-" + test_type + "/Lasso_" + str(num_measurements) + "_" + filename + "-" + test_type + ".wav", x_hat, wave_rate, sampwidth=wave_res)
 
-    spectrum = np.fft.fft(x_hat[:, 0])
+    #x = normalise(x_hat, mean, std)
+
+    spectrum = np.fft.fft(x_hat[:, 0], norm='ortho')
     spectrum = abs(spectrum[0:round(len(spectrum) / 2)])  # Just first half of the spectrum, as the second is the negative copy
 
     plt.figure()
@@ -144,12 +146,12 @@ def run_Lasso(A, measurements, wave_res = 2, wave_rate = 8192, num_measurements 
     plt.xlabel('Frequency (hz)')
     plt.title("Lasso - " + str(num_measurements) + " measurements")
     plt.xlim(0, wave_rate / 2)
-    plt.savefig("Freq_recon/bass-dropout2-3000iter/Lasso_" + str(num_measurements) + "_bass-dropout.jpg")
+    plt.savefig("Freq_recon/" + filename + "-" + test_type + "/Lasso_" + str(num_measurements) + "_" + filename + "-" + test_type + ".jpg")
     plt.close()
 
     return x_hat
 
-def run_DIP(A, y, y0, dtype, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels = 1, wave_len = 16384, num_measurements = 1000, wave_rate = 8192, wave_res = 2, CUDA = True, num_iter = 5000):
+def run_DIP(A, y, y0, dtype, filename, test_type, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels = 1, wave_len = 16384, num_measurements = 1000, wave_rate = 8192, wave_res = 2, CUDA = True, num_iter = 5000):
     net = DCGAN_Audio_Straight(output_size = wave_len, num_measurements = num_measurements)
     net.fc.requires_grad = False
 
@@ -175,7 +177,7 @@ def run_DIP(A, y, y0, dtype, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels = 1, 
 
     mse_log = np.zeros((num_iter))
 
-    MU, SIGMA = get_stats(y0)
+    MU, SIGMA, POWER = get_stats(y0)
 
     mse = torch.nn.MSELoss().type(dtype)
 
@@ -189,11 +191,10 @@ def run_DIP(A, y, y0, dtype, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels = 1, 
         wave = out[0].detach().reshape(-1, num_channels).cpu()
         wave = renormalise(wave, MU, SIGMA)
 
-        mse_log[i] = np.mean(
-            (normalise(y0, MU, SIGMA).reshape((1, -1)) - normalise(wave, MU, SIGMA).reshape((1, -1))) ** 2)
+        mse_log[i] = np.mean((np.squeeze(y0) - np.squeeze(wave))**2)/POWER[0]
 
         if (i == num_iter - 1):
-            spectrum = np.fft.fft(wave[:, 0])
+            spectrum = np.fft.fft(wave[:, 0], norm='ortho')
             spectrum = abs(spectrum[0:round(len(spectrum) / 2)])  # Just first half of the spectrum, as the second is the negative copy
 
             plt.figure()
@@ -201,10 +202,10 @@ def run_DIP(A, y, y0, dtype, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels = 1, 
             plt.xlabel('Frequency (hz)')
             plt.title("Net - " + str(num_measurements) + " measurements")
             plt.xlim(0, wave_rate / 2)
-            plt.savefig("Freq_recon/bass-dropout2-3000iter/Net_" + str(num_measurements) + "_bass-dropout.jpg")
+            plt.savefig("Freq_recon/" + filename + "-" + test_type + "/Net_" + str(num_measurements) + "_" + filename + "-" + test_type + ".jpg")
             plt.close()
 
-            #wavio.write("Audio_recon/Net_" + str(num_measurements) + "_testR.wav", wave, wave_rate, sampwidth = wave_res)
+            wavio.write("Audio_recon/" + filename + "-" + test_type + "/Net_" + str(num_measurements) + "_" + filename + "-" + test_type + ".wav", wave, wave_rate, sampwidth = wave_res)
 
         loss.backward()
         optim.step()
@@ -244,14 +245,16 @@ def get_stats(x):
     b = np.zeros((chans))
     mu = np.zeros((chans))
     sigma = np.zeros((chans))
+    power = np.zeros((chans), dtype=float)
 
     for c in range(chans):
         a[c] = np.min(x[:, c])
         b[c] = np.max(x[:, c])
         mu[c] = (a[c] + b[c]) / 2.0
         sigma[c] = (b[c] - a[c]) / 2.0
+        power[c] = np.mean(np.array(x[:, c], dtype=float) ** 2)
 
-    return [mu, sigma]
+    return [mu, sigma, power]
 
 def normalise(x, mean, std):
     normalised = np.zeros((x.shape))

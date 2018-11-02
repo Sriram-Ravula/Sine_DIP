@@ -41,17 +41,28 @@ else:
     dtype = torch.FloatTensor
 
 
-wave_rate, wave_len, wave_res, nc, y0 = audio_utils.read_wav("audio_data/bass_8192hz_2s.wav")
+filename = "drawers"
+test_type = "gaussian"
+
+
+wave_rate, wave_len, wave_res, nc, y0 = audio_utils.read_wav("audio_data/" + filename + "_8192hz_2s.wav")
 
 compressed = True
-compressed_noisy = False
+compressed_noisy = True
 
 if compressed:
     num_measurements = 1000
 else:
     num_measurements = wave_len
 
-spectrum =np.fft.fft(y0[:,0])
+
+MU, SIGMA, POWER = audio_utils.get_stats(y0)
+
+y = audio_utils.normalise(y0, MU, SIGMA)
+y = torch.Tensor(y)
+y = Variable(y.type(dtype))
+
+spectrum =np.fft.fft(y0[:,0], norm='ortho')
 spectrum = abs(spectrum[0:round(len(spectrum)/2)]) # Just first half of the spectrum, as the second is the negative copy
 
 plt.figure()
@@ -59,17 +70,11 @@ plt.plot(spectrum, 'r')
 plt.xlabel('Frequency (hz)')
 plt.title('Original Waveform')
 plt.xlim(0, wave_rate/2)
-#plt.savefig("Freq_recon/bass-gaussian/bass_freq.jpg")
+plt.savefig("Freq_recon/" + filename + "-" + test_type + "/" + filename + "-" + test_type + "_freq.jpg")
 plt.close()
 
-MU, SIGMA = audio_utils.get_stats(y0)
-
-y = audio_utils.normalise(y0, MU, SIGMA)
-y = torch.Tensor(y)
-y = Variable(y.type(dtype))
 
 #number of measurements to iterate over and record
-#measurements_list = [100, 200, 300, 500, 1000, 1500, 2000, 2500, 3000, 4000]
 measurements_list = [100, 200, 300, 500, 1000, 1500, 2000, 2500, 3000, 4000]
 mse_list = np.zeros((len(measurements_list), 2))
 
@@ -80,11 +85,11 @@ for i in range(len(measurements_list)):
 
     meas_lasso = np.matmul(net_A.numpy(), y0)
 
-    x_hat = audio_utils.run_Lasso(las_A, meas_lasso, wave_res=wave_res, wave_rate=wave_rate, num_measurements=measurements_list[i], output_size=wave_len, num_channels=nc, alpha=0.001)
-    mse_lasso = np.mean((audio_utils.normalise(y0, MU, SIGMA).reshape((1, -1)) - audio_utils.normalise(x_hat, MU, SIGMA).reshape((1, -1))) ** 2)
-    print("Lasso - " + str(measurements_list[i]) + " :", mse_lasso)
+    x_hat = audio_utils.run_Lasso(las_A, MU, SIGMA, meas_lasso, filename, test_type, wave_res=wave_res, wave_rate=wave_rate, num_measurements=measurements_list[i], output_size=wave_len, num_channels=nc, alpha=0.001)
+    mse_lasso = np.mean((np.squeeze(x_hat) - np.squeeze(y0))**2)/POWER[0]
+    print("\nLasso - " + str(measurements_list[i]) + " :", mse_lasso)
 
-    mse_DIP = audio_utils.run_DIP(LR=LR, A=net_A, y=y, y0=y0, dtype=dtype, num_channels=nc, wave_len=wave_len, num_measurements=measurements_list[i], wave_rate = wave_rate, wave_res = wave_res, CUDA=CUDA, num_iter=3000)[-1]
+    mse_DIP = audio_utils.run_DIP(filename = filename, test_type=test_type, LR=LR, A=net_A, y=y, y0=y0, dtype=dtype, num_channels=nc, wave_len=wave_len, num_measurements=measurements_list[i], wave_rate = wave_rate, wave_res = wave_res, CUDA=CUDA, num_iter=3000)[-1]
     print("Net - " + str(measurements_list[i]) + " :", mse_DIP)
 
     mse_list[i,0] = mse_lasso
@@ -98,9 +103,9 @@ plt.plot(measurements_list, mse_list[:, 0], label = "Lasso", color = 'r')
 plt.plot(measurements_list, mse_list[:, 1], label = "Net", color = 'b')
 plt.xlabel("Num Measurements")
 plt.ylabel("MSE")
-plt.title("Dropout Compressed Sensing - Lasso vs. DIP")
+plt.title(test_type + " Compressed Sensing - Lasso vs. DIP")
 plt.legend()
-plt.savefig("Freq_recon/bass-dropout2-3000iter/bass-dropout-3000iter_lasso_net_comp.jpg")
+plt.savefig("Freq_recon/" + filename + "-" + test_type + "/" + filename + "-" + test_type + "-" + str(NUM_ITER) + "iter_lasso_net_comp.jpg")
 plt.show()
 
 

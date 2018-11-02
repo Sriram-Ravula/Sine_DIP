@@ -5,9 +5,10 @@ from scipy import signal
 OUTPUT_RATE = 8192
 OUTPUT_LENGTH = 2
 OUTPUT_CHANNELS = 1
+OUTPUT_RES = 2
 
-in_filename = "Testing.wav"
-out_filename = "TestingR.wav"
+in_filename = "audio_data/drawers.wav"
+out_filename = "audio_data/drawers_8192hz_2s.wav"
 
 wav = wavio.read(in_filename)
 rate = wav.rate
@@ -34,6 +35,6 @@ if (OUTPUT_RATE*OUTPUT_LENGTH <= resampled_wave.shape[0]):
 else:
     output_wave = resampled_wave
 
-wavio.write(out_filename, output_wave, OUTPUT_RATE, sampwidth=resolution)
+wavio.write(out_filename, output_wave, OUTPUT_RATE, sampwidth=OUTPUT_RES)
 
 
