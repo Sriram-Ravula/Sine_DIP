@@ -188,13 +188,13 @@ def run_DIP(A, y, y0, dtype, filename, test_type, LR = 5e-4, MOM = 0.9, WD = 1e-
         loss = mse(net.measurements(z), measurements)  # calculate loss between AG(z,w) and Ay
 
         # DCGAN output is in [-1,1]. Renormalise to [0,1] before plotting
-        wave = out[0].detach().reshape(-1, num_channels).cpu()
-        wave = renormalise(wave, MU, SIGMA)
+        wave_normalised = out[0].detach().reshape(-1, num_channels).cpu()
+        wave = renormalise(wave_normalised, MU, SIGMA)
 
         mse_log[i] = np.mean((np.squeeze(y0) - np.squeeze(wave))**2)/POWER[0]
 
         if (i == num_iter - 1):
-            spectrum = np.fft.fft(wave[:, 0], norm='ortho')
+            spectrum = np.fft.fft(wave_normalised[:, 0], norm='ortho')
             spectrum = abs(spectrum[0:round(len(spectrum) / 2)])  # Just first half of the spectrum, as the second is the negative copy
 
             plt.figure()
@@ -250,8 +250,10 @@ def get_stats(x):
     for c in range(chans):
         a[c] = np.min(x[:, c])
         b[c] = np.max(x[:, c])
-        mu[c] = (a[c] + b[c]) / 2.0
-        sigma[c] = (b[c] - a[c]) / 2.0
+        #mu[c] = (a[c] + b[c]) / 2.0
+        mu[c] = np.mean(x[:, c])
+        #sigma[c] = (b[c] - a[c]) / 2.0
+        sigma[c] = np.std(x[:, c])
         power[c] = np.mean(np.array(x[:, c], dtype=float) ** 2)
 
     return [mu, sigma, power]

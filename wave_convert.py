@@ -7,8 +7,8 @@ OUTPUT_LENGTH = 2
 OUTPUT_CHANNELS = 1
 OUTPUT_RES = 2
 
-in_filename = "audio_data/drawers.wav"
-out_filename = "audio_data/drawers_8192hz_2s.wav"
+in_filename = "audio_data/chirp.wav"
+out_filename = "audio_data/chirp_8192hz_2s.wav"
 
 wav = wavio.read(in_filename)
 rate = wav.rate

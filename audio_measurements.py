@@ -20,7 +20,7 @@ import wavio
 
 import audio_utils
 
-LR = 5e-4 # learning rate
+LR = 1e-4 # learning rate
 MOM = 0.9 # momentum
 NUM_ITER = 3000 # number iterations
 WD = 1e-4 # weight decay for l2-regularization
@@ -41,14 +41,14 @@ else:
     dtype = torch.FloatTensor
 
 
-filename = "drawers"
-test_type = "gaussian"
+filename = "island-music"
+test_type = "dropout2"
 
 
 wave_rate, wave_len, wave_res, nc, y0 = audio_utils.read_wav("audio_data/" + filename + "_8192hz_2s.wav")
 
 compressed = True
-compressed_noisy = True
+compressed_noisy = False
 
 if compressed:
     num_measurements = 1000
@@ -58,11 +58,11 @@ else:
 
 MU, SIGMA, POWER = audio_utils.get_stats(y0)
 
-y = audio_utils.normalise(y0, MU, SIGMA)
-y = torch.Tensor(y)
+y0_normalised = audio_utils.normalise(y0, MU, SIGMA)
+y = torch.Tensor(y0_normalised)
 y = Variable(y.type(dtype))
 
-spectrum =np.fft.fft(y0[:,0], norm='ortho')
+spectrum =np.fft.fft(y0_normalised[:,0], norm='ortho')
 spectrum = abs(spectrum[0:round(len(spectrum)/2)]) # Just first half of the spectrum, as the second is the negative copy
 
 plt.figure()
@@ -76,6 +76,7 @@ plt.close()
 
 #number of measurements to iterate over and record
 measurements_list = [100, 200, 300, 500, 1000, 1500, 2000, 2500, 3000, 4000]
+#measurements_list = [100, 200, 300, 500, 1000, 2000, 3000, 4000]
 mse_list = np.zeros((len(measurements_list), 2))
 
 start = time.time()
@@ -83,9 +84,11 @@ for i in range(len(measurements_list)):
 
     net_A, las_A = audio_utils.get_A(compressed = compressed, noisy = compressed_noisy, num_measurements=measurements_list[i], original_length=wave_len, num_channels=nc)
 
-    meas_lasso = np.matmul(net_A.numpy(), y0)
+    meas_lasso = np.matmul(net_A.numpy(), y0_normalised)
 
-    x_hat = audio_utils.run_Lasso(las_A, MU, SIGMA, meas_lasso, filename, test_type, wave_res=wave_res, wave_rate=wave_rate, num_measurements=measurements_list[i], output_size=wave_len, num_channels=nc, alpha=0.001)
+    x_hat = audio_utils.run_Lasso(las_A, MU, SIGMA, meas_lasso, filename, test_type, wave_res=wave_res, wave_rate=wave_rate, num_measurements=measurements_list[i], output_size=wave_len, num_channels=nc, alpha= 1e-5)
+    x_hat = audio_utils.renormalise(x_hat, MU, SIGMA)
+
     mse_lasso = np.mean((np.squeeze(x_hat) - np.squeeze(y0))**2)/POWER[0]
     print("\nLasso - " + str(measurements_list[i]) + " :", mse_lasso)
 
