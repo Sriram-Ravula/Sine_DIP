@@ -212,7 +212,7 @@ def run_DIP(A, y, y0, dtype, filename, test_type, LR = 5e-4, MOM = 0.9, WD = 1e-
 
     return(mse_log)
 
-#returns measurement matrices for both convnet and Lasso cases
+#returns measurement matrices for both convnet and Lasso - Lasso gets the idct transformed measurements matrix
 def get_A(compressed = True, noisy = False, num_measurements = 1000, original_length = 16384, num_channels = 1):
 
     if compressed:
@@ -221,9 +221,9 @@ def get_A(compressed = True, noisy = False, num_measurements = 1000, original_le
 
             samp_matrix = torch_meas.numpy()
 
-            cpu_meas = np.matmul(samp_matrix, spfft.idct(np.identity(original_length*num_channels), norm = 'ortho', axis=0))
+            lasso_meas = np.matmul(samp_matrix, spfft.idct(np.identity(original_length*num_channels), norm = 'ortho', axis=0))
 
-            return [torch_meas, cpu_meas]
+            return [torch_meas, lasso_meas]
         else:
             kept_samples = random.sample(range(0, original_length), num_measurements)
 
@@ -241,18 +241,12 @@ def get_A(compressed = True, noisy = False, num_measurements = 1000, original_le
 def get_stats(x):
     chans = x.shape[1]
 
-    #a = np.zeros((chans))
-    #b = np.zeros((chans))
     mu = np.zeros((chans))
     sigma = np.zeros((chans))
     power = np.zeros((chans), dtype=float)
 
     for c in range(chans):
-        #a[c] = np.min(x[:, c])
-        #b[c] = np.max(x[:, c])
-        #mu[c] = (a[c] + b[c]) / 2.0
         mu[c] = np.mean(x[:, c])
-        #sigma[c] = (b[c] - a[c]) / 2.0
         sigma[c] = np.std(x[:, c])
         power[c] = np.mean(np.array(x[:, c], dtype=float) ** 2)
 
@@ -263,18 +257,36 @@ def normalise(x, mean, std):
     chans = x.shape[1]
 
     for c in range(chans):
-        normalised[:, c] = (x[:, c] - mean[c]) / std[c]
+        #normalised[:, c] = (x[:, c] - mean[c]) / std[c]
+        normalised[:, c] = x[:, c]/32768
 
     return normalised
 
 def renormalise(x, mean, std):
-    normalised = np.zeros((x.shape))
+    renormalised = np.zeros((x.shape))
     chans = x.data.shape[1]
 
     for c in range(chans):
-        normalised[:, c] = x[:, c] * std[c] + mean[c]
+        #renormalised[:, c] = x[:, c] * std[c] + mean[c]
+        renormalised[:, c] = x[:, c] * 32768
 
-    return normalised
+    return renormalised
 
 def get_noise(num_samples = 16384, nc = 1, std = 1,):
     return (std * np.random.randn(num_samples, nc))
+
+def max_corr(x, y):
+    x_one = np.squeeze(x)
+    y_one = np.squeeze(y)
+
+    mu_x = np.mean(x_one)
+    mu_y = np.mean(y_one)
+    std_x = np.std(x_one)
+    std_y = np.std(y_one)
+
+    x_one = x_one - mu_x
+    y_one = y_one - mu_y
+
+    c = std_x * std_y
+
+    return (np.max(np.correlate(x_one, y_one, "full")))/c

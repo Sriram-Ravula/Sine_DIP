@@ -20,7 +20,7 @@ import wavio
 
 import audio_utils
 
-LR = 1e-4 # learning rate
+LR = 5e-4 # learning rate
 MOM = 0.9 # momentum
 NUM_ITER = 3000 # number iterations
 WD = 1e-4 # weight decay for l2-regularization
@@ -41,8 +41,8 @@ else:
     dtype = torch.FloatTensor
 
 
-filename = "speech-testing"
-test_type = "dropout2"
+filename = "offer"
+test_type = "dropout-16bitscale"
 
 
 wave_rate, wave_len, wave_res, nc, y0 = audio_utils.read_wav("audio_data/" + filename + "_8192hz_2s.wav")

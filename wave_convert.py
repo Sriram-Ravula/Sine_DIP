@@ -7,7 +7,7 @@ OUTPUT_LENGTH = 2
 OUTPUT_CHANNELS = 1
 OUTPUT_RES = 2
 
-in_filename = "audio_data/chirp.wav"
+in_filename = "audio_data/speech-testing_8192hz_2s.wav"
 out_filename = "audio_data/chirp_8192hz_2s.wav"
 
 wav = wavio.read(in_filename)
@@ -35,6 +35,6 @@ if (OUTPUT_RATE*OUTPUT_LENGTH <= resampled_wave.shape[0]):
 else:
     output_wave = resampled_wave
 
-wavio.write(out_filename, output_wave, OUTPUT_RATE, sampwidth=OUTPUT_RES)
+#wavio.write(out_filename, output_wave, OUTPUT_RATE, sampwidth=OUTPUT_RES)
 
 
