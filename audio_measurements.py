@@ -41,7 +41,7 @@ else:
     dtype = torch.FloatTensor
 
 
-filename = "island-music"
+filename = "speech-testing"
 test_type = "dropout2"
 
 

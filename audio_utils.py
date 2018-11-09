@@ -241,15 +241,15 @@ def get_A(compressed = True, noisy = False, num_measurements = 1000, original_le
 def get_stats(x):
     chans = x.shape[1]
 
-    a = np.zeros((chans))
-    b = np.zeros((chans))
+    #a = np.zeros((chans))
+    #b = np.zeros((chans))
     mu = np.zeros((chans))
     sigma = np.zeros((chans))
     power = np.zeros((chans), dtype=float)
 
     for c in range(chans):
-        a[c] = np.min(x[:, c])
-        b[c] = np.max(x[:, c])
+        #a[c] = np.min(x[:, c])
+        #b[c] = np.max(x[:, c])
         #mu[c] = (a[c] + b[c]) / 2.0
         mu[c] = np.mean(x[:, c])
         #sigma[c] = (b[c] - a[c]) / 2.0
@@ -275,3 +275,6 @@ def renormalise(x, mean, std):
         normalised[:, c] = x[:, c] * std[c] + mean[c]
 
     return normalised
+
+def get_noise(num_samples = 16384, nc = 1, std = 1,):
+    return (std * np.random.randn(num_samples, nc))
