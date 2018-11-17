@@ -13,6 +13,8 @@ import math
 
 import scipy.optimize as spopt
 import scipy.fftpack as spfft
+from scipy import signal
+from scipy.stats import pearsonr
 import scipy.ndimage as spimg
 
 import wavio
@@ -176,6 +178,7 @@ def run_DIP(A, y, y0, dtype, filename, test_type, LR = 5e-4, MOM = 0.9, WD = 1e-
         measurements = measurements.cuda()
 
     mse_log = np.zeros((num_iter))
+    last_wave = np.zeros(y0.shape)
 
     MU, SIGMA, POWER = get_stats(y0)
 
@@ -207,10 +210,12 @@ def run_DIP(A, y, y0, dtype, filename, test_type, LR = 5e-4, MOM = 0.9, WD = 1e-
 
             wavio.write("Audio_recon/" + filename + "-" + test_type + "/Net_" + str(num_measurements) + "_" + filename + "-" + test_type + ".wav", wave, wave_rate, sampwidth = wave_res)
 
+            last_wave = wave
+
         loss.backward()
         optim.step()
 
-    return(mse_log)
+    return [mse_log[-1], last_wave]
 
 #returns measurement matrices for both convnet and Lasso - Lasso gets the idct transformed measurements matrix
 def get_A(compressed = True, noisy = False, num_measurements = 1000, original_length = 16384, num_channels = 1):
@@ -258,7 +263,7 @@ def normalise(x, mean, std):
 
     for c in range(chans):
         #normalised[:, c] = (x[:, c] - mean[c]) / std[c]
-        normalised[:, c] = x[:, c]/32768
+        normalised[:, c] = x[:, c]/32768.0
 
     return normalised
 
@@ -268,25 +273,15 @@ def renormalise(x, mean, std):
 
     for c in range(chans):
         #renormalised[:, c] = x[:, c] * std[c] + mean[c]
-        renormalised[:, c] = x[:, c] * 32768
+        renormalised[:, c] = x[:, c] * 32768.0
 
     return renormalised
 
-def get_noise(num_samples = 16384, nc = 1, std = 1,):
+def get_noise(num_samples = 16384, nc = 1, std = 1):
     return (std * np.random.randn(num_samples, nc))
 
 def max_corr(x, y):
     x_one = np.squeeze(x)
     y_one = np.squeeze(y)
 
-    mu_x = np.mean(x_one)
-    mu_y = np.mean(y_one)
-    std_x = np.std(x_one)
-    std_y = np.std(y_one)
-
-    x_one = x_one - mu_x
-    y_one = y_one - mu_y
-
-    c = std_x * std_y
-
-    return (np.max(np.correlate(x_one, y_one, "full")))/c
+    return pearsonr(x_one, y_one)[0]

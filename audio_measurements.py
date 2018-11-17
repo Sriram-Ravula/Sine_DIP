@@ -90,10 +90,12 @@ for i in range(len(measurements_list)):
     x_hat = audio_utils.renormalise(x_hat, MU, SIGMA)
 
     mse_lasso = np.mean((np.squeeze(x_hat) - np.squeeze(y0))**2)/POWER[0]
-    print("\nLasso - " + str(measurements_list[i]) + " :", mse_lasso)
+    print("\nLasso MSE - " + str(measurements_list[i]) + " :", mse_lasso)
+    print("Correlation - ", audio_utils.max_corr(y0, x_hat))
 
-    mse_DIP = audio_utils.run_DIP(filename = filename, test_type=test_type, LR=LR, A=net_A, y=y, y0=y0, dtype=dtype, num_channels=nc, wave_len=wave_len, num_measurements=measurements_list[i], wave_rate = wave_rate, wave_res = wave_res, CUDA=CUDA, num_iter=3000)[-1]
-    print("Net - " + str(measurements_list[i]) + " :", mse_DIP)
+    mse_DIP, dip_wave = audio_utils.run_DIP(filename = filename, test_type=test_type, LR=LR, A=net_A, y=y, y0=y0, dtype=dtype, num_channels=nc, wave_len=wave_len, num_measurements=measurements_list[i], wave_rate = wave_rate, wave_res = wave_res, CUDA=CUDA, num_iter=3000)
+    print("\nNet MSE - " + str(measurements_list[i]) + " :", mse_DIP)
+    print("Correlation - ", audio_utils.max_corr(y0, dip_wave))
 
     mse_list[i,0] = mse_lasso
     mse_list[i,1] = mse_DIP
