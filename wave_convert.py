@@ -1,14 +1,15 @@
 import numpy as np
 import wavio
 from scipy import signal
+import matplotlib.pyplot as plt
 
 OUTPUT_RATE = 8192
 OUTPUT_LENGTH = 2
 OUTPUT_CHANNELS = 1
 OUTPUT_RES = 2
 
-in_filename = "audio_data/speech-testing_8192hz_2s.wav"
-out_filename = "audio_data/chirp_8192hz_2s.wav"
+in_filename = "audio_data/ballad.wav"
+out_filename = "audio_data/ballad_8192hz_2s.wav"
 
 wav = wavio.read(in_filename)
 rate = wav.rate
@@ -27,7 +28,6 @@ resampled_wave = np.zeros((output_samples, OUTPUT_CHANNELS))
 for i in range(OUTPUT_CHANNELS):
     resampled_wave[:, i] = signal.resample(x = wav.data[:, i], num = output_samples)
 
-
 output_wave = np.zeros((OUTPUT_RATE*OUTPUT_LENGTH, OUTPUT_CHANNELS))
 
 if (OUTPUT_RATE*OUTPUT_LENGTH <= resampled_wave.shape[0]):
@@ -35,6 +35,17 @@ if (OUTPUT_RATE*OUTPUT_LENGTH <= resampled_wave.shape[0]):
 else:
     output_wave = resampled_wave
 
-#wavio.write(out_filename, output_wave, OUTPUT_RATE, sampwidth=OUTPUT_RES)
+x = output_wave/(2**(8*resolution -1))
+spectrum =np.fft.fft(x[:,0], norm='ortho')
+spectrum = abs(spectrum[0:round(len(spectrum)/2)]) # Just first half of the spectrum, as the second is the negative copy
+
+plt.figure()
+plt.plot(spectrum, 'r')
+plt.xlabel('Frequency (hz)')
+plt.title('Original Waveform')
+plt.xlim(0, OUTPUT_RATE/2)
+plt.show()
+
+wavio.write(out_filename, output_wave, OUTPUT_RATE, sampwidth=OUTPUT_RES)
 
 

@@ -39,8 +39,16 @@ if CUDA :
 else:
     dtype = torch.FloatTensor
 
-filename = "offer"
-test_type = "CS"
+filename = "ballad"
+test_type = "Dropout"
+noisy = True
+noise_std = 0.1
+if noisy:
+    noise_str = "-noisy-" + str(noise_std)
+else:
+    noise_str = ""
+
+save_loc = "audio_results/" + filename + "-" + test_type + noise_str + "/"
 
 wave_rate, wave_len, wave_res, nc, x0 = inverse_utils.read_wav("audio_data/" + filename + "_8192hz_2s.wav")
 if wave_len != 16384 or nc > 1:
@@ -48,7 +56,7 @@ if wave_len != 16384 or nc > 1:
     exit(0)
 
 if test_type == 'Dropout' or test_type =='CS':
-    num_measurements = [10, 200, 300, 400, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000]
+    num_measurements = [100, 200, 300, 400, 500, 750, 1000, 1500, 2000, 2500, 3000, 4000]
 else:
     num_measurements = [wave_len]
 
@@ -62,7 +70,7 @@ plt.plot(spectrum, 'r')
 plt.xlabel('Frequency (hz)')
 plt.title('Original Waveform')
 plt.xlim(0, wave_rate/2)
-plt.savefig("Freq_recon/" + filename + "-" + test_type + "/" + filename + "-" + test_type + "_freq.jpg")
+plt.savefig(save_loc + filename + "_freq.jpg")
 plt.close()
 
 mse_list = np.zeros((len(num_measurements), 2))
@@ -73,31 +81,31 @@ for i in range(len(num_measurements)):
     phi, A = inverse_utils.get_A(case=test_type, num_measurements=num_measurements[i], original_length=wave_len)
 
     y = np.dot(phi, x) #create the measurements
+    if noisy:
+        y = y + inverse_utils.get_noise(num_samples=num_measurements[i], nc=1, std=noise_std)
 
     x_hat_lasso = inverse_utils.run_Lasso(A=A, y=y, output_size=wave_len, alpha=alpha)
-
     mse_lasso = np.mean((np.squeeze(x_hat_lasso) - np.squeeze(x))**2)
     print("\nLasso MSE - " + str(num_measurements[i]) + " :", mse_lasso)
 
     x_hat_dip = dip_utils.run_DIP(phi, y, dtype, LR=LR, MOM=MOM, WD=WD, output_size=wave_len, num_measurements=num_measurements[i], CUDA=CUDA, num_iter=NUM_ITER)
-
     mse_dip = np.mean((np.squeeze(x_hat_dip) - np.squeeze(x))**2)
-    print("\nNet MSE - " + str(num_measurements[i]) + " :", mse_dip)
+    print("Net MSE - " + str(num_measurements[i]) + " :", mse_dip)
 
     mse_list[i,0] = mse_lasso
     mse_list[i,1] = mse_dip
 
 end = time.time()
-print("Execution Time: ", round(end-start, 2), "s")
+print("Execution Time: ", round(end-start, 2), "seconds")
 
 plt.figure()
 plt.plot(num_measurements, mse_list[:, 0], label = "Lasso", color = 'r')
 plt.plot(num_measurements, mse_list[:, 1], label = "Net", color = 'b')
 plt.xlabel("Num Measurements")
 plt.ylabel("MSE")
-plt.title(test_type + " Compressed Sensing - Lasso vs. DIP")
+plt.title(filename + "-" + test_type + noise_str  + " Lasso vs. DIP")
 plt.legend()
-plt.savefig("Freq_recon/" + filename + "-" + test_type + "/" + filename + "-" + test_type + "-" + str(NUM_ITER) + "iter_lasso_net_comp.jpg")
+plt.savefig(save_loc + filename + "-" + test_type + noise_str + "-" + str(NUM_ITER) + "iter_lasso_net_comp.jpg")
 plt.show()
 
 
