@@ -100,7 +100,7 @@ class DCGAN_Audio_Straight(nn.Module):
         x = F.relu(self.bn10(self.conv10(x)))
         x = F.relu(self.bn11(self.conv11(x)))
         x = F.relu(self.bn12(self.conv12(x)))
-        x = F.tanh(self.conv13(x))
+        x = torch.tanh(self.conv13(x))
 
         return x
 
@@ -116,12 +116,12 @@ class DCGAN_Audio_Straight(nn.Module):
             return meas
 
 #Given measurement matrix A and observed measurements y, return estimate of x
-def run_DIP(A, y, dtype, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels = 1, output_size = 16384, num_measurements = 1000, CUDA = True, num_iter = 3000):
+def run_DIP(A, y, dtype, NGF = 64, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels = 1, output_size = 16384, num_measurements = 1000, CUDA = True, num_iter = 3000, alpha_tv = 1e-4):
 
     y = torch.Tensor(y)  #convert the input measurements to CUDA
     y = Variable(y.type(dtype))
 
-    net = DCGAN_Audio_Straight(output_size = output_size, num_measurements = num_measurements, cuda=CUDA, nc=num_channels)
+    net = DCGAN_Audio_Straight(ngf = NGF, output_size = output_size, num_measurements = num_measurements, cuda=CUDA, nc=num_channels)
     net.fc.requires_grad = False
     net.fc.weight.data = torch.Tensor(A)
 
@@ -142,17 +142,19 @@ def run_DIP(A, y, dtype, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels 
 
     x_hat = np.zeros((output_size, num_channels))
 
-    mse = torch.nn.MSELoss().type(dtype)
+    mse_log = []
 
     for i in range(num_iter):
         optim.zero_grad()  # clears graidents of all optimized variables
         out = net(z)  # produces wave (in form of data tensor) i.e. G(z,w)
 
-        loss = mse(net.measurements(z), y)  # calculate loss between AG(z,w) and Ay
+        #loss = mse(net.measurements(z), y)  # calculate loss between AG(z,w) and Ay
+        loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
+
+        mse_log.append(loss.detach().cpu())
 
         wave = out[0].detach().reshape(-1, num_channels).cpu()
 
-        #mse_log[i] = np.mean((np.squeeze(y0) - np.squeeze(wave))**2)/POWER[0]
 
         if (i == num_iter - 1):
             x_hat = wave
@@ -162,9 +164,18 @@ def run_DIP(A, y, dtype, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels 
 
     return x_hat.numpy()
 
-def MSE_TV_LOSS (x_hat, y, alpha, dtype):
-    tv = 0
-    for i in range(len(x_hat.cpu()[:, 0])-1):
-        tv = tv + abs(x_hat.cpu()[i, 0] - x_hat.cpu()[i+1, 0])
+def MSE_TV_LOSS (x_hat, x, alpha, dtype):
 
-    return torch.mean(torch.sum((x_hat.cpu()[:,0] - y.cpu()[:, 0])**2)) + (torch.Tensor(alpha*tv)).type(dtype)
+    x_hat_shift = x_hat.detach().cpu().numpy()
+    x_hat_shift = np.roll(x_hat_shift, 1) #shift x_hat right by 1 to do TV
+    x_hat_shift = torch.Tensor(x_hat_shift)
+    x_hat_shift = Variable(x_hat_shift.type(dtype)) #convert back to torch tensor to use gradient
+
+    tv = x_hat - x_hat_shift
+    tv[0,0] = 0
+    tv = abs(tv)
+
+    mse = torch.nn.MSELoss(reduction='sum').type(dtype)
+    mseloss = mse(x_hat, x)
+
+    return mseloss + alpha*torch.sum(tv)
