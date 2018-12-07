@@ -40,8 +40,8 @@ if CUDA :
 else:
     dtype = torch.FloatTensor
 
-filename = "speech-testing"
-test_type = "Dropout"
+filename = "captain"
+test_type = "CS"
 noisy = False
 noise_std = 0
 if noisy:
