@@ -41,8 +41,8 @@ else:
     dtype = torch.FloatTensor
 
 filename = "captain"
-test_type = "CS"
-noisy = False
+test_type = "Dropout"
+noisy = True
 noise_std = 0
 if noisy:
     noise_str = "-noisy-" + str(noise_std)

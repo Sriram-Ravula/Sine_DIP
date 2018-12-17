@@ -58,6 +58,11 @@ def normalise(x, bits):
 
     return x/(2**(bits-1))
 
+    #mu = np.mean(np.squeeze(x))
+    #sigma = np.std(np.squeeze(x))
+
+    #return (x - mu)/sigma
+
 #Renormalises array to have +/- 2^(bits-1) range
 def renormalise(x, bits):
 
