@@ -63,6 +63,14 @@ def normalise(x, bits):
 
     #return (x - mu)/sigma
 
+def heart_normalise(x):
+    x0 = np.squeeze(x)
+    max = np.amax(x0)
+    min = np.amin(x0)
+    range = max-min
+    y = 2*(x - min)/range - 1
+    return y
+
 #Renormalises array to have +/- 2^(bits-1) range
 def renormalise(x, bits):
 

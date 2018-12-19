@@ -20,6 +20,7 @@ import wavio
 
 import inverse_utils
 import dip_utils
+import collections
 
 LR = 1e-4 # learning rate
 MOM = 0.9 # momentum
@@ -27,6 +28,7 @@ NUM_ITER = 3000 # number iterations
 WD = 1 # weight decay for l2-regularization
 Z_NUM = 32 # input seed
 NGF = 64 # number of filters per layer
+BATCH_SIZE = 1 # batch size of gradient step
 nc = 1 #num channels in the net I/0
 alpha = 1e-5 #learning rate of Lasso
 alpha_tv = 1e-1 #TV parameter for net loss
@@ -39,8 +41,8 @@ if CUDA :
 else:
     dtype = torch.FloatTensor
 
-filename = "whale"
-test_type = "Dropout"
+filename = "Mackey-Glass"
+test_type = "CS"
 noisy = False
 noise_std = 0
 if noisy:
@@ -50,7 +52,53 @@ else:
 
 save_loc = "audio_results/" + filename + "-" + test_type + noise_str + "/"
 
-wave_rate, wave_len, wave_res, nc, x0 = inverse_utils.read_wav("audio_data/" + filename + "_8192hz_2s.wav")
+#wave_rate, wave_len, wave_res, nc, x0 = inverse_utils.read_wav("audio_data/" + filename + "_8192hz_2s.wav")
+def mackey_glass(sample_len=1000, tau=30, seed=None, n_samples=1):
+    '''
+    mackey_glass(sample_len=1000, tau=17, seed = None, n_samples = 1) -> input
+    Generate the Mackey Glass time-series. Parameters are:
+        - sample_len: length of the time-series in timesteps. Default is 1000.
+        - tau: delay of the MG - system. Commonly used values are tau=17 (mild
+          chaos) and tau=30 (moderate chaos). Default is 17.
+        - seed: to seed the random generator, can be used to generate the same
+          timeseries at each invocation.
+        - n_samples : number of samples to generate
+    '''
+    delta_t = 10
+    history_len = tau * delta_t
+    # Initial conditions for the history of the system
+    timeseries = 1.2
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    samples = []
+
+    for _ in range(n_samples):
+        history = collections.deque(1.2 * np.ones(history_len) + 0.2 * \
+                                    (np.random.rand(history_len) - 0.5))
+        # Preallocate the array for the time-series
+        inp = np.zeros((sample_len, 1))
+
+        for timestep in range(sample_len):
+            for _ in range(delta_t):
+                xtau = history.popleft()
+                history.append(timeseries)
+                timeseries = history[-1] + (0.2 * xtau / (1.0 + xtau ** 10) - \
+                                            0.1 * history[-1]) / delta_t
+            inp[timestep] = timeseries
+
+        # Squash timeseries through tanh
+        inp = np.tanh(inp - 1)
+        samples.append(inp)
+    return samples
+
+chaos = mackey_glass(16384, 50, 2240, 1)
+wave_len = len(np.squeeze(chaos))
+nc = 1
+x0 = np.zeros((16384,1))
+x0[:,0] = np.squeeze(chaos)
+
 if wave_len != 16384 or nc > 1:
     print("ILL-FORMATTED WAV - TRY AGAIN")
     exit(0)
@@ -60,7 +108,8 @@ if test_type == 'Dropout' or test_type =='CS':
 else:
     num_measurements = [wave_len]
 
-x = inverse_utils.normalise(x0, wave_res*8)  #normalise the wave data to [-1,1]
+#x = inverse_utils.normalise(x0, wave_res*8)  #normalise the wave data to [-1,1]
+x = inverse_utils.heart_normalise(x0)
 
 spectrum =np.fft.fft(x[:,0], norm='ortho')
 spectrum = abs(spectrum[0:round(len(spectrum)/2)]) # Just first half of the spectrum, as the second is the negative copy
@@ -69,7 +118,7 @@ plt.figure()
 plt.plot(spectrum, 'r')
 plt.xlabel('Frequency (hz)')
 plt.title('Original Waveform')
-plt.xlim(0, wave_rate/2)
+plt.xlim(0, 8192)
 plt.savefig(save_loc + filename + "_freq.jpg")
 plt.close()
 

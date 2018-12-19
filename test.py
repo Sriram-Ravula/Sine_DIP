@@ -27,7 +27,6 @@ MOM = 0.9 # momentum
 WD = 1 # weight decay for l2-regularization
 Z_NUM = 32 # input seed
 NGF = 64 # number of filters per layer
-BATCH_SIZE = 1 # batch size of gradient step
 nc = 1 #num channels in the net I/0
 alpha = 1e-5 #learning rate of Lasso
 alpha_tv = 1e-1
