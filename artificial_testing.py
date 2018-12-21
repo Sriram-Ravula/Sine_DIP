@@ -24,7 +24,7 @@ import collections
 
 LR = 1e-4 # learning rate
 MOM = 0.9 # momentum
-NUM_ITER = 3000 # number iterations
+NUM_ITER = 5000 # number iterations
 WD = 1 # weight decay for l2-regularization
 Z_NUM = 32 # input seed
 NGF = 64 # number of filters per layer
@@ -84,8 +84,7 @@ def mackey_glass(sample_len=1000, tau=30, seed=None, n_samples=1):
             for _ in range(delta_t):
                 xtau = history.popleft()
                 history.append(timeseries)
-                timeseries = history[-1] + (0.2 * xtau / (1.0 + xtau ** 10) - \
-                                            0.1 * history[-1]) / delta_t
+                timeseries = history[-1] + (0.2 * xtau / (1.0 + xtau ** 10) - 0.1 * history[-1]) / delta_t
             inp[timestep] = timeseries
 
         # Squash timeseries through tanh
@@ -93,7 +92,7 @@ def mackey_glass(sample_len=1000, tau=30, seed=None, n_samples=1):
         samples.append(inp)
     return samples
 
-chaos = mackey_glass(16384, 50, 2240, 1)
+chaos = mackey_glass(16384, 100, 2240, 1)
 wave_len = len(np.squeeze(chaos))
 nc = 1
 x0 = np.zeros((16384,1))

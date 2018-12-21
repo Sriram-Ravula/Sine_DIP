@@ -191,7 +191,7 @@ class DCGAN_Heart(nn.Module):
             return meas
 
 #Given measurement matrix A and observed measurements y, return estimate of x
-def run_DIP(A, y, dtype, NGF = 64, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels = 1, output_size = 16384, num_measurements = 1000, CUDA = True, num_iter = 3000, alpha_tv = 1e-4):
+def run_DIP(A, y, dtype, NGF = 64, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num_channels = 1, output_size = 16384, num_measurements = 1000, CUDA = True, num_iter = 3000, alpha_tv = 1e-4, get_mse=False, true_signal = []):
 
     y = torch.Tensor(y)  #convert the input measurements to CUDA
     y = Variable(y.type(dtype))
@@ -226,9 +226,10 @@ def run_DIP(A, y, dtype, NGF = 64, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num
         #loss = mse(net.measurements(z), y)  # calculate loss between AG(z,w) and Ay
         loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
 
-        mse_log.append(loss.detach().cpu().numpy())
-
         wave = out[0].detach().reshape(-1, num_channels).cpu()
+
+        if get_mse:
+            mse_log.append(np.mean((np.squeeze(true_signal) - np.squeeze(wave.numpy())) ** 2))
 
         if (i == num_iter - 1):
             x_hat = wave
@@ -243,10 +244,13 @@ def run_DIP(A, y, dtype, NGF = 64, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num
         loss.backward()
         optim.step()
 
+    if get_mse:
+        return [x_hat.numpy(), mse_log]
+
     return x_hat.numpy()
 
 #Given measurement matrix A and observed measurements y, return estimate of x
-def run_DIP_heart(A, y, dtype, NGF = 128, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e-4, num_channels = 1, output_size = 1024, num_measurements = 100, CUDA = True, num_iter = 3000, alpha_tv = 1e-4):
+def run_DIP_heart(A, y, dtype, NGF = 128, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e-1, num_channels = 1, output_size = 1024, num_measurements = 100, CUDA = True, num_iter = 3000, alpha_tv = 1e-1, get_mse=False, true_signal=[]):
 
     y = torch.Tensor(y)  #convert the input measurements to CUDA
     y = Variable(y.type(dtype))
@@ -281,9 +285,10 @@ def run_DIP_heart(A, y, dtype, NGF = 128, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e
         #loss = mse(net.measurements(z), y)  # calculate loss between AG(z,w) and Ay
         loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
 
-        mse_log.append(loss.detach().cpu().numpy())
-
         wave = out[0].detach().reshape(-1, num_channels).cpu()
+
+        if get_mse:
+            mse_log.append(np.mean((np.squeeze(true_signal) - np.squeeze(wave.numpy()))**2))
 
         if (i == num_iter - 1):
             x_hat = wave
@@ -297,6 +302,9 @@ def run_DIP_heart(A, y, dtype, NGF = 128, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e
 
         loss.backward()
         optim.step()
+
+    if get_mse:
+        return [x_hat.numpy(), mse_log]
 
     return x_hat.numpy()
 
