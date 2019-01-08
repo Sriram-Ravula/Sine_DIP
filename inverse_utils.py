@@ -5,6 +5,8 @@ import math
 import scipy.fftpack as spfft
 import wavio
 from sklearn.linear_model import Lasso
+import scipy.io
+import collections
 
 
 def read_wav(filename):
@@ -39,7 +41,7 @@ def read_wav(filename):
 
     return [rate, length, resolution, nc, x]
 
-def normalise(x, bits):
+def audio_normalise(x, bits):
     """
     Normalizes an input array to have range [-1, 1]
 
@@ -63,7 +65,7 @@ def normalise(x, bits):
 
     #return (x - mu)/sigma
 
-def heart_normalise(x):
+def normalise(x):
     x0 = np.squeeze(x)
     max = np.amax(x0)
     min = np.amin(x0)
@@ -83,13 +85,13 @@ def get_noise(num_samples = 16384, nc = 1, std = 0.1):
 #Generates the sampling matrix phi (for DIP) and measurement matrix A = phi*psi (where psi is the IDCT matrix for sparse reconstruction, e.g. Lasso)
 def get_A(case, num_measurements = 1000, original_length = 16384):
 
-    if case == 'Dropout':
+    if case == 'Imputation':
         kept_samples = random.sample(range(0, original_length), num_measurements)
 
         A = spfft.idct(np.identity(original_length), norm='ortho', axis=0)[kept_samples, :]
         phi = np.eye(original_length)[kept_samples, :]
 
-        return [phi, A]
+        return [phi, A, kept_samples]
 
     if case =='CS':
         phi = (1 / math.sqrt(1.0 * num_measurements)) * np.random.randn(num_measurements, original_length)
@@ -97,14 +99,7 @@ def get_A(case, num_measurements = 1000, original_length = 16384):
 
         return [phi, A]
 
-    if case == 'Deconvolution':
-        #FIX THIS SECTION
-        phi = np.eye(original_length)
-        A = spfft.idct(np.identity(original_length), norm='ortho', axis=0)
-
-        return[phi, A]
-
-    if case == 'Identity':
+    if case == 'Denoising':
         phi = np.eye(original_length)
         A = spfft.idct(np.identity(original_length), norm='ortho', axis=0)
 
@@ -116,7 +111,7 @@ def get_A(case, num_measurements = 1000, original_length = 16384):
         exit(0)
 
 #Run Lasso reconstruction given measurement matrix A and observed measurements y
-def run_Lasso(A, y, output_size = 16834, alpha = 0.00001):
+def run_Lasso(A, y, output_size = 16834, alpha = 1e-5):
     lasso = Lasso(alpha=alpha)
     lasso.fit(A, y)
 
@@ -125,3 +120,92 @@ def run_Lasso(A, y, output_size = 16834, alpha = 0.00001):
     x_hat = x_hat.reshape(-1, 1)
 
     return x_hat
+
+def save_matrix(mat, filename):
+    scipy.io.savemat(filename, mdict={'A': mat})
+
+def save_data(data, filename):
+    scipy.io.savemat(filename, mdict={'x': data})
+
+def save_log(data, test, method, results, filename):
+    if test == 'Denoising': #if denoising, then data is a single point
+        text = data + "\n" + test + "\n" + method + "\n" + str(results)
+
+        file = open(filename, "w")
+        file.write(text)
+        file.close()
+
+    else:
+        len = results.shape[0]
+
+        text = data + "\n" + test + "\n" + method + "\n"
+        for i in range(len):
+            text = text + str(results[i,0]) + " " + str(results[i,1])
+
+            if i < len-1:
+                text = text + "\n"
+
+        file = open(filename, "w")
+        file.write(text)
+        file.close()
+
+def read_log(filename):
+    f = open(filename, 'r')
+    lines = f.read().splitlines()
+    f.close()
+
+    test = lines[1]
+    if test == 'Denoising':
+        return float(lines[3].strip("\r\n\t '"))
+
+    else:
+        length = len(lines) - 3
+        parsed = np.zeros((length, 2))
+
+        for i in range(length):
+            numbers_str = lines[i+3].strip("\r\n\t").split()
+            numbers_float = [float(x) for x in numbers_str]
+
+            parsed[i,0] = numbers_float[0]
+            parsed[i,1] = numbers_float[1]
+
+        return parsed
+
+def get_artificial(sample_len=16384, tau=30, seed=2240, n_samples=1):
+    '''
+    mackey_glass(sample_len=1000, tau=17, seed = None, n_samples = 1) -> input
+    Generate the Mackey Glass time-series. Parameters are:
+        - sample_len: length of the time-series in timesteps. Default is 1000.
+        - tau: delay of the MG - system. Commonly used values are tau=17 (mild
+          chaos) and tau=30 (moderate chaos). Default is 17.
+        - seed: to seed the random generator, can be used to generate the same
+          timeseries at each invocation.
+        - n_samples : number of samples to generate
+    '''
+    delta_t = 10
+    history_len = tau * delta_t
+    # Initial conditions for the history of the system
+    timeseries = 1.2
+
+    if seed is not None:
+        np.random.seed(seed)
+
+    samples = []
+
+    for _ in range(n_samples):
+        history = collections.deque(1.2 * np.ones(history_len) + 0.2 * \
+                                    (np.random.rand(history_len) - 0.5))
+        # Preallocate the array for the time-series
+        inp = np.zeros((sample_len, 1))
+
+        for timestep in range(sample_len):
+            for _ in range(delta_t):
+                xtau = history.popleft()
+                history.append(timeseries)
+                timeseries = history[-1] + (0.2 * xtau / (1.0 + xtau ** 10) - 0.1 * history[-1]) / delta_t
+            inp[timestep] = timeseries
+
+        # Squash timeseries through tanh
+        inp = np.tanh(inp - 1)
+        samples.append(inp)
+    return samples

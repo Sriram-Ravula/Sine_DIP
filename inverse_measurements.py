@@ -60,7 +60,7 @@ if test_type == 'Dropout' or test_type =='CS':
 else:
     num_measurements = [wave_len]
 
-x = inverse_utils.normalise(x0, wave_res*8)  #normalise the wave data to [-1,1]
+x = inverse_utils.audio_normalise(x0, wave_res*8)  #normalise the wave data to [-1,1]
 
 spectrum =np.fft.fft(x[:,0], norm='ortho')
 spectrum = abs(spectrum[0:round(len(spectrum)/2)]) # Just first half of the spectrum, as the second is the negative copy
