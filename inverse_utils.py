@@ -138,7 +138,7 @@ def save_data(data, filename):
     scipy.io.savemat(filename, mdict={'x': data})
 
 def save_log(data, test, method, results, filename):
-    if test == 'Denoising': #if denoising, then data is a single point
+    if "Denoising" in test: #if denoising, then data is a single point
         text = data + "\n" + test + "\n" + method + "\n" + str(results)
 
         file = open(filename, "w")
@@ -165,7 +165,7 @@ def read_log(filename):
     f.close()
 
     test = lines[1]
-    if test == 'Denoising':
+    if "Denoising" in test:
         return float(lines[3].strip("\r\n\t '"))
 
     else:

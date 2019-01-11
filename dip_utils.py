@@ -117,9 +117,9 @@ class DCGAN_Audio_Straight(nn.Module):
         else:
             return meas
 
-class DCGAN_Heart(nn.Module):
+class DCGAN_Short(nn.Module):
     def __init__(self, nz=32, ngf=128, output_size=1024, nc=1, num_measurements=100, cuda = True):
-        super(DCGAN_Heart, self).__init__()
+        super(DCGAN_Short, self).__init__()
         self.nc = nc
         self.output_size = output_size
         self.CUDA = cuda
@@ -250,12 +250,12 @@ def run_DIP(A, y, dtype, NGF = 64, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num
     return x_hat.numpy()
 
 #Given measurement matrix A and observed measurements y, return estimate of x
-def run_DIP_heart(A, y, dtype, NGF = 128, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e-1, num_channels = 1, output_size = 1024, num_measurements = 100, CUDA = True, num_iter = 3000, alpha_tv = 1e-1, get_mse=False, true_signal=[]):
+def run_DIP_short(A, y, dtype, NGF = 128, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e-1, num_channels = 1, output_size = 1024, num_measurements = 100, CUDA = True, num_iter = 3000, alpha_tv = 1e-1, get_mse=False, true_signal=[]):
 
     y = torch.Tensor(y)  #convert the input measurements to CUDA
     y = Variable(y.type(dtype))
 
-    net = DCGAN_Heart(ngf = NGF, output_size = output_size, num_measurements = num_measurements, cuda=CUDA, nc=num_channels)
+    net = DCGAN_Short(ngf = NGF, output_size = output_size, num_measurements = num_measurements, cuda=CUDA, nc=num_channels)
     net.fc.requires_grad = False
     net.fc.weight.data = torch.Tensor(A)
 

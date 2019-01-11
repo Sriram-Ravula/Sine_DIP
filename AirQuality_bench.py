@@ -15,7 +15,7 @@ NGF = 64 # number of filters per layer
 nc = 1 #num channels in the net I/0
 alpha = 1e-5 #learning rate of Lasso
 alpha_tv = 1e-1 #TV parameter for net loss
-LENGTH = 16384
+LENGTH = 1024
 
 
 CUDA = torch.cuda.is_available()
@@ -28,35 +28,33 @@ else:
 
 
 save_loc = "/home/sravula/Projects/compsensing_dip-master/Results/"
-test_type = "Imputation" #Imputation, CS, DCT, or Denoising
-data_type = "Audio" #Audio, Chirp, or Air
-sample = "captain"  #If using audio, give the name of the sample you wish to use
+data_loc = "/home/sravula/AirQualityUCI/AirQuality.csv"
+test_type = "CS" #Imputation, CS, DCT, or Denoising
+data_type = "AirQuality" #AirQuality ONLY
+sample = "CO-1"  #Choice of: O3-1, O3-2, NO2-1, NO2-2, CO-1, or CO-2
+std = 0.1 #standard deviation of AWGN, for denoising
 
 
-if data_type == "Audio":
-    wave_rate, wave_len, wave_res, nc, x0 = inverse_utils.read_wav("audio_data/" + sample + "_8192hz_2s.wav")
+if data_type != "AirQuality":
+    print("UNSUPPORTED DATA TYPE SELECTED - IF YOU WISH TO TEST AUDIO OR CHIRP DATA, PLEASE USE Test_bench.py")
+    exit(0)
+else:
+    x0 = inverse_utils.get_air_data(loc=data_loc, data=sample, length=LENGTH)
+    x = np.zeros((LENGTH, 1))
+    x[:, 0] = inverse_utils.normalise(x0)
 
-    if wave_len != LENGTH or nc > 1:
-        print("ILL-FORMATTED WAV - TRY AGAIN")
-        exit(0)
-
-    x = inverse_utils.audio_normalise(x0, wave_res * 8)  #normalise the wave data to [-1,1]
-elif data_type == "Chirp":
-    f_start = 750
-    f_end = 350
-    x = inverse_utils.get_chirp(LENGTH, f_start, f_end)
-
-    sample = "chirp:" + str(f_start) + "-" + str(f_end)
-
-    inverse_utils.save_data(x, save_loc + "chirp" + ":" + f_start + "-" + f_end) #save the new wave
+    inverse_utils.save_data(x, save_loc + test_type + "/" + sample + "/" + sample)  # save the new wave
 
 
 if test_type == "Imputation" or test_type == "CS" or test_type == "DCT":
-    num_measurements = [100, 500, 1000, 2000, 4000]
+    num_measurements = [10, 25, 50, 75, 150]
 elif test_type == "Denoising":
     num_measurements = [LENGTH]
+    noise = inverse_utils.get_noise(num_samples=LENGTH, nc = nc, std = std)
+    x = x+noise
+    inverse_utils.save_data(x, save_loc + test_type + "/" + sample + "/" + sample + "-noisy-" + std)  # save the wave again with noise added
 else:
-    print("UNSUPPORTED TEST TYPE")
+    print("UNSUPPORTED TEST TYPE. PLEASE CHOOSE: Imputation, CS, DCT, OR Denoising")
     exit(0)
 
 
@@ -64,14 +62,15 @@ error_dip = []
 error_lasso = []
 start = time.time()
 
-for i in range(len(num_measurements)):
+i = 0
+while i < len(num_measurements):
 
     if test_type != "Imputation": #if the test is not imputation, we do not get a list of kept samples
         phi, A = inverse_utils.get_A(case=test_type, num_measurements=num_measurements[i], original_length=LENGTH)
     else:
         phi, A, kept_samples = inverse_utils.get_A(case=test_type, num_measurements=num_measurements[i], original_length=LENGTH)
 
-    inverse_utils.save_matrix(phi, save_loc + test_type + "/" + sample + "-" + str(num_measurements[i])) #save the measurement matrix for later reference
+    inverse_utils.save_matrix(phi, save_loc + test_type + "/" + sample + "/" + sample + "-" + str(num_measurements[i])) #save the measurement matrix for later reference
 
     y = np.dot(phi, x)  #create the measurements
 
@@ -88,7 +87,7 @@ for i in range(len(num_measurements)):
         else:
             mse_lasso = mse_lasso + np.mean((np.squeeze(x_hat_lasso) - np.squeeze(x))**2)
 
-        x_hat_DIP = dip_utils.run_DIP(phi, y, dtype, NGF = NGF, LR=LR, MOM=MOM, WD=WD, output_size=LENGTH, num_measurements=num_measurements[i], CUDA=CUDA, num_iter=NUM_ITER, alpha_tv=alpha_tv)
+        x_hat_DIP = dip_utils.run_DIP_short(phi, y, dtype, NGF = NGF, LR=LR, MOM=MOM, WD=WD, output_size=LENGTH, num_measurements=num_measurements[i], CUDA=CUDA, num_iter=NUM_ITER, alpha_tv=alpha_tv)
 
         if test_type == "Imputation": #for imputation, we only wish to calculate MSE on the imputed values
             mse_DIP = mse_DIP + np.mean((np.squeeze(x_hat_DIP)[imputed_samples] - np.squeeze(x)[imputed_samples])**2)
@@ -98,11 +97,14 @@ for i in range(len(num_measurements)):
     mse_lasso = mse_lasso/float(num_instances)
     mse_DIP = mse_DIP/float(num_instances)
 
-    error_dip.append(mse_DIP)
-    error_lasso.append(mse_lasso)
-
-    print("\nNet MSE - " + str(num_measurements[i]) + " :", mse_DIP)
-    print("Lasso MSE - " + str(num_measurements[i]) + " :", mse_lasso)
+    if i == 0 or (mse_lasso <= error_lasso[i-1] and mse_DIP <= error_dip[i-1]): #advance the loop to next num_measurements ONLY if we are in the first iteration or both MSE's have improved
+        error_dip.append(mse_DIP)
+        error_lasso.append(mse_lasso)
+        print("\nNet MSE - " + str(num_measurements[i]) + " :", mse_DIP)
+        print("Lasso MSE - " + str(num_measurements[i]) + " :", mse_lasso)
+        i = i+1
+    else:
+        print("Re-Doing " + str(num_measurements[i]) + " measurements")
 
 
 end = time.time()
@@ -117,8 +119,11 @@ Lasso_results[:,0] = num_measurements
 DIP_results[:,1] = error_dip
 Lasso_results[:,1] = error_lasso
 
-inverse_utils.save_log(data=sample, test=test_type, method="DIP", results=DIP_results, filename=save_loc + test_type + "/" + sample + "-" + "DIP" + ".txt")
-inverse_utils.save_log(data=sample, test=test_type, method="Lasso", results=Lasso_results, filename=save_loc + test_type + "/" + sample + "-" + "Lasso" + ".txt")
+if test_type == "Denoising": #rename the test type for logging data
+    test_type = test_type + "-" + str(std)
+
+inverse_utils.save_log(data=sample, test=test_type, method="DIP", results=DIP_results, filename=save_loc + test_type + "/" + sample + "/" + sample + "-" + "DIP" + ".txt")
+inverse_utils.save_log(data=sample, test=test_type, method="Lasso", results=Lasso_results, filename=save_loc + test_type + "/" + sample + "/" + sample + "-" + "Lasso" + ".txt")
 
 
 

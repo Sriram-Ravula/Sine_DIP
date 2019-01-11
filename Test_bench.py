@@ -28,9 +28,10 @@ else:
 
 
 save_loc = "/home/sravula/Projects/compsensing_dip-master/Results/"
-test_type = "Imputation" #Imputation, CS, DCT, or Denoising
-data_type = "Audio" #Audio, Chirp, or Air
+test_type = "CS" #Imputation, CS, DCT, or Denoising
+data_type = "Chirp" #Audio or Chirp
 sample = "captain"  #If using audio, give the name of the sample you wish to use
+std = 0.1 #the standard deviation of AWGN, if denoising
 
 
 if data_type == "Audio":
@@ -43,20 +44,26 @@ if data_type == "Audio":
     x = inverse_utils.audio_normalise(x0, wave_res * 8)  #normalise the wave data to [-1,1]
 elif data_type == "Chirp":
     f_start = 750
-    f_end = 350
+    f_end = 650
     x = inverse_utils.get_chirp(LENGTH, f_start, f_end)
 
     sample = "chirp:" + str(f_start) + "-" + str(f_end)
 
-    inverse_utils.save_data(x, save_loc + "chirp" + ":" + f_start + "-" + f_end) #save the new wave
+    inverse_utils.save_data(x, save_loc + test_type + "/" + sample + "/" + sample) #save the new wave
+else:
+    print("UNSUPPORTED DATA TYPE SELECTED - IF YOU WISH TO TEST AIR QUALITY DATA, PLEASE USE AirQuality_bench.py")
+    exit(0)
 
 
 if test_type == "Imputation" or test_type == "CS" or test_type == "DCT":
     num_measurements = [100, 500, 1000, 2000, 4000]
 elif test_type == "Denoising":
     num_measurements = [LENGTH]
+    noise = inverse_utils.get_noise(num_samples=LENGTH, nc = nc, std = std)
+    x = x+noise
+    inverse_utils.save_data(x, save_loc + test_type + "/" + sample + "/" + sample + "-noisy-" + std)  # save the wave again with noise added
 else:
-    print("UNSUPPORTED TEST TYPE")
+    print("UNSUPPORTED TEST TYPE. PLEASE CHOOSE: Imputation, CS, DCT, OR Denoising")
     exit(0)
 
 
@@ -64,14 +71,15 @@ error_dip = []
 error_lasso = []
 start = time.time()
 
-for i in range(len(num_measurements)):
+i = 0
+while i < len(num_measurements):
 
     if test_type != "Imputation": #if the test is not imputation, we do not get a list of kept samples
         phi, A = inverse_utils.get_A(case=test_type, num_measurements=num_measurements[i], original_length=LENGTH)
     else:
         phi, A, kept_samples = inverse_utils.get_A(case=test_type, num_measurements=num_measurements[i], original_length=LENGTH)
 
-    inverse_utils.save_matrix(phi, save_loc + test_type + "/" + sample + "-" + str(num_measurements[i])) #save the measurement matrix for later reference
+    inverse_utils.save_matrix(phi, save_loc + test_type + "/" + sample + "/" + sample + "-" + str(num_measurements[i])) #save the measurement matrix for later reference
 
     y = np.dot(phi, x)  #create the measurements
 
@@ -98,11 +106,14 @@ for i in range(len(num_measurements)):
     mse_lasso = mse_lasso/float(num_instances)
     mse_DIP = mse_DIP/float(num_instances)
 
-    error_dip.append(mse_DIP)
-    error_lasso.append(mse_lasso)
-
-    print("\nNet MSE - " + str(num_measurements[i]) + " :", mse_DIP)
-    print("Lasso MSE - " + str(num_measurements[i]) + " :", mse_lasso)
+    if i == 0 or (mse_lasso <= error_lasso[i-1] and mse_DIP <= error_dip[i-1]): #advance the loop to next num_measurements ONLY if we are in the first iteration or both MSE's have improved
+        error_dip.append(mse_DIP)
+        error_lasso.append(mse_lasso)
+        print("\nNet MSE - " + str(num_measurements[i]) + " :", mse_DIP)
+        print("Lasso MSE - " + str(num_measurements[i]) + " :", mse_lasso)
+        i = i+1
+    else:
+        print("Re-Doing " + str(num_measurements[i]) + " measurements")
 
 
 end = time.time()
@@ -117,8 +128,11 @@ Lasso_results[:,0] = num_measurements
 DIP_results[:,1] = error_dip
 Lasso_results[:,1] = error_lasso
 
-inverse_utils.save_log(data=sample, test=test_type, method="DIP", results=DIP_results, filename=save_loc + test_type + "/" + sample + "-" + "DIP" + ".txt")
-inverse_utils.save_log(data=sample, test=test_type, method="Lasso", results=Lasso_results, filename=save_loc + test_type + "/" + sample + "-" + "Lasso" + ".txt")
+if test_type == "Denoising": #rename the test type for logging data
+    test_type = test_type + "-" + str(std)
+
+inverse_utils.save_log(data=sample, test=test_type, method="DIP", results=DIP_results, filename=save_loc + test_type + "/" + sample + "/" + sample + "-" + "DIP" + ".txt")
+inverse_utils.save_log(data=sample, test=test_type, method="Lasso", results=Lasso_results, filename=save_loc + test_type + "/" + sample + "/" + sample + "-" + "Lasso" + ".txt")
 
 
 
