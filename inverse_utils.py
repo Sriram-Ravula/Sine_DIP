@@ -6,7 +6,9 @@ import scipy.fftpack as spfft
 import wavio
 from sklearn.linear_model import Lasso
 import scipy.io
+from scipy.signal import chirp
 import collections
+import pandas as pd
 
 
 def read_wav(filename):
@@ -67,10 +69,10 @@ def audio_normalise(x, bits):
 
 def normalise(x):
     x0 = np.squeeze(x)
-    max = np.amax(x0)
-    min = np.amin(x0)
-    range = max-min
-    y = 2*(x - min)/range - 1
+    maxi = np.amax(x0)
+    mini = np.amin(x0)
+    ranges = maxi-mini
+    y = 2*(x - mini)/ranges - 1
     return y
 
 #Renormalises array to have +/- 2^(bits-1) range
@@ -102,6 +104,14 @@ def get_A(case, num_measurements = 1000, original_length = 16384):
     if case == 'Denoising':
         phi = np.eye(original_length)
         A = spfft.idct(np.identity(original_length), norm='ortho', axis=0)
+
+        return [phi, A]
+
+    if case == 'DCT':
+        kept_samples = random.sample(range(0, original_length), num_measurements)
+
+        phi = (spfft.dct(np.eye(original_length), norm='ortho').transpose())[kept_samples, :] #transpose the output because scipy produces transposed DCT matrix
+        A = np.matmul(phi, spfft.idct(np.identity(original_length), norm='ortho', axis=0))
 
         return [phi, A]
 
@@ -171,41 +181,14 @@ def read_log(filename):
 
         return parsed
 
-def get_artificial(sample_len=16384, tau=30, seed=2240, n_samples=1):
-    '''
-    mackey_glass(sample_len=1000, tau=17, seed = None, n_samples = 1) -> input
-    Generate the Mackey Glass time-series. Parameters are:
-        - sample_len: length of the time-series in timesteps. Default is 1000.
-        - tau: delay of the MG - system. Commonly used values are tau=17 (mild
-          chaos) and tau=30 (moderate chaos). Default is 17.
-        - seed: to seed the random generator, can be used to generate the same
-          timeseries at each invocation.
-        - n_samples : number of samples to generate
-    '''
-    delta_t = 10
-    history_len = tau * delta_t
-    # Initial conditions for the history of the system
-    timeseries = 1.2
+def get_chirp(length, fstart, fend):
+    t = np.linspace(0, 2, length)
+    x0 = chirp(t, f0 = fstart, f1=fend, t1=2, method='linear')
+    x = np.zeros((length, 1))
+    x[:,0] = x0
+    return x
 
-    if seed is not None:
-        np.random.seed(seed)
-
-    samples = []
-
-    for _ in range(n_samples):
-        history = collections.deque(1.2 * np.ones(history_len) + 0.2 * \
-                                    (np.random.rand(history_len) - 0.5))
-        # Preallocate the array for the time-series
-        inp = np.zeros((sample_len, 1))
-
-        for timestep in range(sample_len):
-            for _ in range(delta_t):
-                xtau = history.popleft()
-                history.append(timeseries)
-                timeseries = history[-1] + (0.2 * xtau / (1.0 + xtau ** 10) - 0.1 * history[-1]) / delta_t
-            inp[timestep] = timeseries
-
-        # Squash timeseries through tanh
-        inp = np.tanh(inp - 1)
-        samples.append(inp)
-    return samples
+def get_air_data(loc = "/home/sravula/AirQualityUCI/AirQuality.csv", data = "O3-1", length = 1024):
+    x = pd.read_csv(loc)
+    one = x[data].dropna().values[0:length]
+    return one
