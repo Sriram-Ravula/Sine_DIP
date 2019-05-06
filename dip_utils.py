@@ -7,23 +7,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 import numpy as np
-import matplotlib.pyplot as plt
 
-import math
-
-import scipy.optimize as spopt
-import scipy.fftpack as spfft
-from scipy import signal
-from scipy.stats import pearsonr
-import scipy.ndimage as spimg
-
-import wavio
-
-from sklearn.linear_model import Lasso
-
-# exit_window = 500
-# thresh_ratio = 400
-
+#ARCHITECTURE FOR N = 16384 SIGNALS
 class DCGAN_Audio_Straight(nn.Module):
     def __init__(self, nz=32, ngf=64, output_size=16384, nc=1, num_measurements=1000, cuda = True):
         super(DCGAN_Audio_Straight, self).__init__()
@@ -117,6 +102,7 @@ class DCGAN_Audio_Straight(nn.Module):
         else:
             return meas
 
+#ARCHITECTURE FOR N = 1024 SIGNALS
 class DCGAN_Short(nn.Module):
     def __init__(self, nz=32, ngf=128, output_size=1024, nc=1, num_measurements=100, cuda = True):
         super(DCGAN_Short, self).__init__()
@@ -220,11 +206,12 @@ def run_DIP(A, y, dtype, NGF = 64, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num
     mse_log = []
 
     for i in range(num_iter):
-        optim.zero_grad()  # clears graidents of all optimized variables
+        optim.zero_grad()  # clears gradients of all optimized variables
         out = net(z)  # produces wave (in form of data tensor) i.e. G(z,w)
 
         #loss = mse(net.measurements(z), y)  # calculate loss between AG(z,w) and Ay
-        loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
+        #loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
+        loss = TV_Loss(net.measurements(z), y, alpha_tv, dtype)
 
         wave = out[0].detach().reshape(-1, num_channels).cpu()
 
@@ -250,7 +237,7 @@ def run_DIP(A, y, dtype, NGF = 64, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num
     return x_hat.numpy()
 
 #Given measurement matrix A and observed measurements y, return estimate of x
-def run_DIP_short(A, y, dtype, NGF = 128, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e-1, num_channels = 1, output_size = 1024, num_measurements = 100, CUDA = True, num_iter = 3000, alpha_tv = 1e-1, get_mse=False, true_signal=[]):
+def run_DIP_short(A, y, dtype, NGF = 64, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e-1, num_channels = 1, output_size = 1024, num_measurements = 100, CUDA = True, num_iter = 3000, alpha_tv = 1e-1, get_mse=False, true_signal=[]):
 
     y = torch.Tensor(y)  #convert the input measurements to CUDA
     y = Variable(y.type(dtype))
@@ -283,7 +270,8 @@ def run_DIP_short(A, y, dtype, NGF = 128, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e
         out = net(z)  # produces wave (in form of data tensor) i.e. G(z,w)
 
         #loss = mse(net.measurements(z), y)  # calculate loss between AG(z,w) and Ay
-        loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
+        #loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
+        loss = TV_Loss(net.measurements(z), y, alpha_tv, dtype)
 
         wave = out[0].detach().reshape(-1, num_channels).cpu()
 
@@ -308,6 +296,7 @@ def run_DIP_short(A, y, dtype, NGF = 128, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e
 
     return x_hat.numpy()
 
+#TV Loss for Network training
 def MSE_TV_LOSS (x_hat, x, alpha, dtype):
 
     x_hat_shift = x_hat.detach().cpu().numpy()
@@ -324,10 +313,10 @@ def MSE_TV_LOSS (x_hat, x, alpha, dtype):
 
     return mseloss + alpha*torch.sum(tv)
 
-# def exit_condition(window):
-#     mse_base = window[0]
-#
-#     if len(np.where(window > mse_base)[0]) >= thresh_ratio:  # if 75/100 values in window are higher than mse_base
-#         return True
-#     else:
-#         return False
+def TV_Loss(pred, y, alpha_TV, dtype):
+    TV = torch.sum(torch.abs(pred[:-1, :] - pred[1:, :]))
+
+    mse = torch.nn.MSELoss(reduction='sum').type(dtype)
+    MSE = mse(pred, y)
+
+    return MSE + alpha_TV * TV
