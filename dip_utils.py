@@ -210,8 +210,7 @@ def run_DIP(A, y, dtype, NGF = 64, nz = 32, LR = 5e-4, MOM = 0.9, WD = 1e-4, num
         out = net(z)  # produces wave (in form of data tensor) i.e. G(z,w)
 
         #loss = mse(net.measurements(z), y)  # calculate loss between AG(z,w) and Ay
-        #loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
-        loss = TV_Loss(net.measurements(z), y, alpha_tv, dtype)
+        loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
 
         wave = out[0].detach().reshape(-1, num_channels).cpu()
 
@@ -270,8 +269,7 @@ def run_DIP_short(A, y, dtype, NGF = 64, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e-
         out = net(z)  # produces wave (in form of data tensor) i.e. G(z,w)
 
         #loss = mse(net.measurements(z), y)  # calculate loss between AG(z,w) and Ay
-        #loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
-        loss = TV_Loss(net.measurements(z), y, alpha_tv, dtype)
+        loss = MSE_TV_LOSS(net.measurements(z), y, alpha_tv, dtype)
 
         wave = out[0].detach().reshape(-1, num_channels).cpu()
 
@@ -296,24 +294,24 @@ def run_DIP_short(A, y, dtype, NGF = 64, nz = 32, LR = 1e-4, MOM = 0.9, WD = 1e-
 
     return x_hat.numpy()
 
-#TV Loss for Network training
-def MSE_TV_LOSS (x_hat, x, alpha, dtype):
+# #TV Loss for Network training
+# def MSE_TV_LOSS (x_hat, x, alpha, dtype):
+#
+#     x_hat_shift = x_hat.detach().cpu().numpy()
+#     x_hat_shift = np.roll(x_hat_shift, 1) #shift x_hat right by 1 to do TV
+#     x_hat_shift = torch.Tensor(x_hat_shift)
+#     x_hat_shift = Variable(x_hat_shift.type(dtype)) #convert back to torch tensor to use gradient
+#
+#     tv = x_hat - x_hat_shift
+#     tv[0,0] = 0
+#     tv = abs(tv)
+#
+#     mse = torch.nn.MSELoss(reduction='sum').type(dtype)
+#     mseloss = mse(x_hat, x)
+#
+#     return mseloss + alpha*torch.sum(tv)
 
-    x_hat_shift = x_hat.detach().cpu().numpy()
-    x_hat_shift = np.roll(x_hat_shift, 1) #shift x_hat right by 1 to do TV
-    x_hat_shift = torch.Tensor(x_hat_shift)
-    x_hat_shift = Variable(x_hat_shift.type(dtype)) #convert back to torch tensor to use gradient
-
-    tv = x_hat - x_hat_shift
-    tv[0,0] = 0
-    tv = abs(tv)
-
-    mse = torch.nn.MSELoss(reduction='sum').type(dtype)
-    mseloss = mse(x_hat, x)
-
-    return mseloss + alpha*torch.sum(tv)
-
-def TV_Loss(pred, y, alpha_TV, dtype):
+def MSE_TV_LOSS(pred, y, alpha_TV, dtype):
     TV = torch.sum(torch.abs(pred[:-1, :] - pred[1:, :]))
 
     mse = torch.nn.MSELoss(reduction='sum').type(dtype)

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import inverse_utils
 import dip_utils
 import time
+import pywt
 
 
 LR = 1e-4 # learning rate
@@ -17,7 +18,7 @@ alpha = 1e-5 #learning rate of Lasso
 alpha_tv = 1e-1 #TV parameter for net loss
 LENGTH = 1024
 
-data_type = "AirQuality" #AirQuality ONLY
+data_type = "Wavelet" #AirQuality or Wavelet
 
 
 CUDA = torch.cuda.is_available()
@@ -31,21 +32,27 @@ else:
 
 save_loc = "/home/sravula/Projects/compsensing_dip-master/Results/" #The location you wish to save your results
 data_loc = "/home/sravula/AirQualityUCI/AirQuality.csv" #Location of the air quality CSV data
-test_type = "Denoising" #Imputation, CS, DCT, or Denoising
-sample = "O3-1"  #Choice of: O3-1, O3-2, NO2-1, NO2-2, CO-1, or CO-2
+test_type = "Imputation" #Imputation, CS, DCT, or Denoising
+sample = "twochirp"  #Choice of: (O3-1, O3-2, NO2-1, NO2-2, CO-1, or CO-2) for air quality and (blocks, twochirp, mishmash) for Wavelet
 std = 0.1 #standard deviation of AWGN, for denoising
 
-
-if data_type != "AirQuality":
-    print("UNSUPPORTED DATA TYPE SELECTED - IF YOU WISH TO TEST AUDIO OR CHIRP DATA, PLEASE USE Test_bench.py")
-    exit(0)
-else:
+if data_type == "AirQuality":
     x0 = inverse_utils.get_air_data(loc=data_loc, data=sample, length=LENGTH)
     x = np.zeros((LENGTH, 1))
     x[:, 0] = inverse_utils.normalise(x0)
 
     #save the series for easy access later
     inverse_utils.save_data(x, save_loc + test_type + "/" + sample + "/" + sample)  # save the new wave
+elif data_type == "Wavelet":
+    x0 = pywt.data.demo_signal(sample, LENGTH)
+    x = np.zeros((LENGTH, 1))
+    x[:, 0] = inverse_utils.normalise(x0)
+
+    #save the series for easy access later
+    inverse_utils.save_data(x, save_loc + test_type + "/" + sample + "/" + sample)  # save the new wave
+else:
+    print("UNSUPPORTED DATA TYPE SELECTED - IF YOU WISH TO TEST AUDIO OR CHIRP DATA, PLEASE USE Test_bench.py")
+    exit(0)
 
 
 if test_type == "Imputation" or test_type == "CS" or test_type == "DCT":
@@ -79,7 +86,7 @@ while i < len(num_measurements):
 
     y = np.dot(phi, x)  #create the measurements
 
-    num_instances = 5 #how many instances of lasso and DIP we wish to run to average results
+    num_instances = 3 #how many instances of lasso and DIP we wish to run to average results
     mse_lasso = 0
     mse_DIP = 0
     for t in range(num_instances):
@@ -106,11 +113,14 @@ while i < len(num_measurements):
     mse_lasso = mse_lasso/float(num_instances)
     mse_DIP = mse_DIP/float(num_instances)
 
-    error_dip.append(mse_DIP)
-    error_lasso.append(mse_lasso)
-    print("\nNet MSE - " + str(num_measurements[i]) + " :", mse_DIP)
-    print("Lasso MSE - " + str(num_measurements[i]) + " :", mse_lasso)
-    i = i+1
+    if(i ==0 or (mse_DIP <= error_dip[i-1] and mse_lasso <= error_lasso[i-1])):
+        error_dip.append(mse_DIP)
+        error_lasso.append(mse_lasso)
+        print("\nNet MSE - " + str(num_measurements[i]) + " :", mse_DIP)
+        print("Lasso MSE - " + str(num_measurements[i]) + " :", mse_lasso)
+        i = i + 1
+    else:
+        print("RE-DOING " + str(num_measurements[i]))
 
 
 end = time.time()
