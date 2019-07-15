@@ -79,4 +79,7 @@ def two_pass_filtering(x, Ws, Wg, r):
     for i in range(n):
         y_hat[i] = __single_pass(y, i, Ws, Wg)
 
+    x = np.abs(x)
+    y_hat = np.abs(y_hat)
+
     return np.divide(x.squeeze(), y_hat.squeeze())
