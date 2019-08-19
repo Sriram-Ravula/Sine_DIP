@@ -81,7 +81,20 @@ x_missing[missing_samples] = None
 
 #Gaussian imputation
 x_hat_gaussian = x.copy()
-x_hat_gaussian[missing_samples] = np.random.normal(np.mean(y), 0.1, (len(missing_samples), 1))
+
+missing1 = range(395, 425)
+missing2 = range(805, 835)
+missing3 = range(200, 230)
+
+surrounding1 = np.union1d(np.array(range(375, 395)), np.array(range(425, 445)))
+surrounding2 = np.union1d(np.array(range(785, 805)), np.array(range(835, 855)))
+surrounding3 = np.union1d(np.array(range(180, 200)), np.array(range(230, 250)))
+
+x_hat_gaussian[missing1] = np.random.normal(np.mean(x[surrounding1]), np.std(x[surrounding1]), (len(missing1), 1))
+x_hat_gaussian[missing2] = np.random.normal(np.mean(x[surrounding2]), np.std(x[surrounding2]), (len(missing2), 1))
+x_hat_gaussian[missing3] = np.random.normal(np.mean(x[surrounding3]), np.std(x[surrounding3]), (len(missing3), 1))
+
+#x_hat_gaussian[missing_samples] = np.random.normal(np.mean(y), 0.1, (len(missing_samples), 1)) #coarse global filling
 
 #Linear interpolation
 f_interp = interp1d(x = kept_samples, y = x[kept_samples].squeeze() + 2, kind='linear')
@@ -92,9 +105,9 @@ x_hat_interp[missing_samples] = interped.reshape(-1, 1)
 #Plotting signals before imputation
 plt.figure()
 #plt.plot(range(LENGTH), x_hat, label = "DIP Imputation", color = 'b')
-plt.plot(range(LENGTH), x_hat_lasso, label = "Imputed", color = 'g')
+#plt.plot(range(LENGTH), x_hat_lasso, label = "Imputed", color = 'g')
 #plt.plot(range(LENGTH), x, label = "Original", color = 'r')
-#plt.plot(range(LENGTH), x_hat_gaussian, label = "Gaussian-filled", color = 'c')
+plt.plot(range(LENGTH), x_hat_gaussian, label = "Gaussian-filled", color = 'c')
 #plt.plot(range(LENGTH), x_hat_interp, label = "Linear Interpolation", color = 'm')
 #plt.plot(range(LENGTH), x_missing, label = "With Missing Values", color = 'k')
 plt.legend()
@@ -105,15 +118,15 @@ plt.show()
 #Normalize imputed signals
 #orig_normalised = s.two_pass_filtering(x+2, 20, 35, 1)
 #imputed_normalised = s.two_pass_filtering(x_hat+2, 20, 35, 1)
-lasso_normalised = s.two_pass_filtering(x_hat_lasso + 2, 20, 35, 1)
-#gaussian_normalised = s.two_pass_filtering(x_hat_gaussian + 2, 20, 35, 1)
+#lasso_normalised = s.two_pass_filtering(x_hat_lasso + 2, 20, 35, 1)
+gaussian_normalised = s.two_pass_filtering(x_hat_gaussian + 2, 20, 35, 1)
 #interp_normalised = s.two_pass_filtering(x_hat_interp + 2, 20, 35, 1)
 
 plt.figure()
 #plt.plot(range(LENGTH), imputed_normalised, label = "DIP Imputation", color = 'b')
-plt.plot(range(LENGTH), lasso_normalised, label = "Lasso", color = 'g')
+#plt.plot(range(LENGTH), lasso_normalised, label = "Lasso", color = 'g')
 #plt.plot(range(LENGTH), orig_normalised, label = "Original", color = 'r')
-#plt.plot(range(LENGTH), gaussian_normalised, label = "Gaussian-filled", color = 'c')
+plt.plot(range(LENGTH), gaussian_normalised, label = "Gaussian-filled", color = 'c')
 #plt.plot(range(LENGTH), interp_normalised, label = "Linear Interpolation", color = 'm')
 plt.ylim(0.5, 1.5)
 plt.legend()
